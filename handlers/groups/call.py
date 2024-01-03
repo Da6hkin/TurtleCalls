@@ -1,3 +1,5 @@
+import asyncio
+
 import aiohttp
 from aiogram import types
 from aiogram.dispatcher import FSMContext
@@ -50,12 +52,12 @@ async def echo(call: types.CallbackQuery, state: FSMContext):
             contract = state_data[message_id][2]
             if call.data == "yes":
                 users = await db.select_all_users()
+                coros = []
                 for user in users:
-                    try:
-                        await bot.send_message(chat_id=user['telegram_id'],
-                                               text=f"New Solana call from {call.from_user.full_name}\n<b>${coin_ticker}</b>\n<code>{contract}</code>\n<a href='https://t.me/mcqueen_bonkbot?start=ref_o895c_ca_{contract}'>BONK BUY</a> | <a href='https://birdeye.so/token/{contract}?chain=solana'>Birdeye</a>")
-                    except Exception:
-                        pass
+                    coros.append(bot.send_message(chat_id=user['telegram_id'],
+                                               text=f"New Solana call from {call.from_user.full_name}\n<b>${coin_ticker}</b>\n<code>{contract}</code>\n<a href='https://t.me/mcqueen_bonkbot?start=ref_o895c_ca_{contract}'>BONK BUY</a> | <a href='https://birdeye.so/token/{contract}?chain=solana'>Birdeye</a>"))
+
+                await asyncio.gather(*coros, return_exceptions=True)
                 await call.message.edit_reply_markup(reply_markup=None)
                 await call.message.reply("Call have been made")
                 del state_data[message_id]
