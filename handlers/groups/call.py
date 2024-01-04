@@ -41,10 +41,10 @@ async def check_call(message: types.Message, state: FSMContext):
                         f"https://open-api.dextools.io/free/v2/token/solana/{splitted_args[0]}/info") as resp:
                     json_data = await resp.json()
                     reply_message = await message.reply(
-                        f"You sure you want to make a call on ${symbol}\n💰 FDV: <code>{humanize_number(json_data['fdv'])}</code>",
+                        f"You sure you want to make a call on ${symbol}\n💰 FDV: <code>{humanize_number(json_data['data']['fdv'])}</code>",
                         reply_markup=yes_or_no)
                     state_data[reply_message.message_id] = [message.from_user.id, symbol,
-                                                            splitted_args[0], json_data['fdv']]
+                                                            splitted_args[0], json_data['data']['fdv']]
                     await state.update_data(state_data)
 
 
@@ -67,7 +67,7 @@ async def send_call(call: types.CallbackQuery, state: FSMContext):
 
                 await asyncio.gather(*coros, return_exceptions=True)
                 await call.message.edit_reply_markup(reply_markup=None)
-                await call.message.reply("Call have been made")
+                await call.message.reply(f"{call.data} call have been made")
                 del state_data[message_id]
                 await state.update_data(state_data)
             else:
