@@ -13,7 +13,7 @@ from loader import dp, db, bot
 
 
 @dp.message_handler(Command('call'), IsGroup())
-async def echo(message: types.Message, state: FSMContext):
+async def check_call(message: types.Message, state: FSMContext):
     arguments = message.get_args()
     state_data = await state.get_data()
     if len(arguments) == 0:
@@ -26,24 +26,30 @@ async def echo(message: types.Message, state: FSMContext):
             headers = {
                 "X-BLOBR-KEY": f"{data.config.DEXTOOLS}"
             }
+            symbol = ""
             async with aiohttp.ClientSession(headers=headers) as session:
                 async with session.get(
-                        f"https://open-api.dextools.io/free/v2/token/solana/{splitted_args[0]}/info") as resp:
+                        f"https://open-api.dextools.io/free/v2/token/solana/{splitted_args[0]}") as resp:
                     json_body = await resp.json()
                     if json_body["statusCode"] != 200:
                         await message.reply(
                             "Please re-check the CA that you've sent\nHaving problems finding this CA on solana blockchain")
+                        return
                     else:
-                        reply_message = await message.reply(
-                            f"You sure you want to make a call on ${json_body['data']['symbol']}\n💰 FDV: <code>{humanize_number(json_body['fdv'])}</code>",
-                            reply_markup=yes_or_no)
-                        state_data[reply_message.message_id] = [message.from_user.id, json_body['data']['symbol'],
-                                                                splitted_args[0], json_body['fdv']]
-                        await state.update_data(state_data)
+                        symbol = json_body['data']['symbol']
+                async with session.get(
+                        f"https://open-api.dextools.io/free/v2/token/solana/{splitted_args[0]}/info") as resp:
+                    json_data = await resp.json()
+                    reply_message = await message.reply(
+                        f"You sure you want to make a call on ${symbol}\n💰 FDV: <code>{humanize_number(json_data['fdv'])}</code>",
+                        reply_markup=yes_or_no)
+                    state_data[reply_message.message_id] = [message.from_user.id, symbol,
+                                                            splitted_args[0], json_data['fdv']]
+                    await state.update_data(state_data)
 
 
 @dp.callback_query_handler()
-async def echo(call: types.CallbackQuery, state: FSMContext):
+async def send_call(call: types.CallbackQuery, state: FSMContext):
     await call.answer()
     state_data = await state.get_data()
     message_id = call.message.message_id
