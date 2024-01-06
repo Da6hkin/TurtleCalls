@@ -4,8 +4,8 @@ from asyncpg import UniqueViolationError
 from loader import dp, db
 
 
-@dp.message_handler(commands=['start'], state="*")
-async def bot_start(message: types.Message, state: FSMContext):
+@dp.message_handler(commands=['start'])
+async def bot_start(message: types.Message):
     try:
         await db.save_user(message.from_user.id)
     except UniqueViolationError:

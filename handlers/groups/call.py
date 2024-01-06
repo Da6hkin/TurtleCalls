@@ -12,7 +12,7 @@ from keyboards.inline.call_keyboards import yes_or_no
 from loader import dp, db, bot
 
 
-@dp.message_handler(Command('call'), IsGroup(), state="*")
+@dp.message_handler(IsGroup(), commands=['call'])
 async def check_call(message: types.Message, state: FSMContext):
     arguments = message.get_args()
     state_data = await state.get_data()
@@ -40,11 +40,16 @@ async def check_call(message: types.Message, state: FSMContext):
                 async with session.get(
                         f"https://open-api.dextools.io/free/v2/token/solana/{splitted_args[0]}/info") as resp:
                     json_data = await resp.json()
+                    if json_data['data']['fdv'] is None:
+                        print(json_data)
+                        mcap = "None"
+                    else:
+                        mcap = humanize_number(json_data['data']['fdv'])
                     reply_message = await message.reply(
-                        f"You sure you want to make a call on ${symbol}\n💰 FDV: <code>{humanize_number(json_data['data']['fdv'])}</code>",
+                        f"You sure you want to make a call on ${symbol}\n💰 FDV: <code>{mcap}</code>",
                         reply_markup=yes_or_no)
                     state_data[reply_message.message_id] = [message.from_user.id, symbol,
-                                                            splitted_args[0], json_data['data']['fdv']]
+                                                            splitted_args[0], mcap]
                     await state.update_data(state_data)
 
 
@@ -57,7 +62,7 @@ async def send_call(call: types.CallbackQuery, state: FSMContext):
         if state_data[message_id][0] == call.from_user.id:
             coin_ticker = state_data[message_id][1]
             contract = state_data[message_id][2]
-            mcap = humanize_number(state_data[message_id][3])
+            mcap = state_data[message_id][3]
             if call.data != "no":
                 users = await db.select_all_users()
                 coros = []
