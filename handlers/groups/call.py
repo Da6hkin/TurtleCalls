@@ -12,7 +12,7 @@ from keyboards.inline.call_keyboards import yes_or_no
 from loader import dp, db, bot
 
 
-@dp.message_handler(Command('call'), IsGroup())
+@dp.message_handler(Command('call'), IsGroup(), state="*")
 async def check_call(message: types.Message, state: FSMContext):
     arguments = message.get_args()
     state_data = await state.get_data()
