@@ -1,15 +1,12 @@
-import asyncio
-
 import aiohttp
 from aiogram import types
 from aiogram.dispatcher import FSMContext
-from aiogram.dispatcher.filters import Command
-from aiogram.utils.exceptions import ChatNotFound
+
 
 import data.config
 from filters import IsGroup
 from keyboards.inline.call_keyboards import yes_or_no
-from loader import dp, db, bot
+from loader import dp, bot
 
 
 @dp.message_handler(IsGroup(), commands=['call'])
@@ -23,33 +20,23 @@ async def check_call(message: types.Message, state: FSMContext):
         if len(splitted_args) > 1:
             await message.reply("You have to put ONLY CA after /call")
         else:
-            headers = {
-                "X-BLOBR-KEY": f"{data.config.DEXTOOLS}"
-            }
-            symbol = ""
-            async with aiohttp.ClientSession(headers=headers) as session:
+            async with aiohttp.ClientSession() as session:
                 async with session.get(
-                        f"https://open-api.dextools.io/free/v2/token/solana/{splitted_args[0]}") as resp:
-                    json_body = await resp.json()
-                    if json_body["statusCode"] != 200:
+                        f"https://api.dexscreener.com/latest/dex/tokens/{splitted_args[0]}") as resp:
+                    if resp.status != 200:
                         await message.reply(
-                            "Please re-check the CA that you've sent\nHaving problems finding this CA on solana blockchain")
+                            "Please re-check the CA that you've sent\nHaving problems finding this CA")
                         return
-                    else:
-                        symbol = json_body['data']['symbol']
-                async with session.get(
-                        f"https://open-api.dextools.io/free/v2/token/solana/{splitted_args[0]}/info") as resp:
-                    json_data = await resp.json()
-                    if json_data['data']['fdv'] is None:
-                        print(json_data)
-                        mcap = "None"
-                    else:
-                        mcap = humanize_number(json_data['data']['fdv'])
+                    json_body = await resp.json()
+                    token_info = json_body['pairs'][0]
+                    symbol = token_info['baseToken']['symbol']
+                    mcap = humanize_number(token_info['fdv'])
+                    chain = token_info["chainId"]
                     reply_message = await message.reply(
-                        f"You sure you want to make a call on ${symbol}\n💰 FDV: <code>{mcap}</code>",
+                        f"You sure you want to make a call on {symbol}\n💰 FDV: <code>{mcap}</code>\n{chain}",
                         reply_markup=yes_or_no)
                     state_data[reply_message.message_id] = [message.from_user.id, symbol,
-                                                            splitted_args[0], mcap]
+                                                            splitted_args[0], mcap, chain]
                     await state.update_data(state_data)
 
 
@@ -63,14 +50,16 @@ async def send_call(call: types.CallbackQuery, state: FSMContext):
             coin_ticker = state_data[message_id][1]
             contract = state_data[message_id][2]
             mcap = state_data[message_id][3]
+            chain = state_data[message_id][4]
             if call.data != "no":
-                users = await db.select_all_users()
-                coros = []
-                for user in users:
-                    coros.append(bot.send_message(chat_id=user['telegram_id'],
-                                                  text=f"New Solana <b>{call.data}</b> call from <b>{call.from_user.first_name}</b>\n<b>${coin_ticker}</b>\n💰 FDV: <code>{mcap}</code>\n<code>{contract}</code>\n<a href='https://t.me/mcqueen_bonkbot?start=ref_o895c_ca_{contract}'>BONK BUY</a> | <a href='https://birdeye.so/token/{contract}?chain=solana'>Birdeye</a>"))
-
-                await asyncio.gather(*coros, return_exceptions=True)
+                text = f"New {chain} <b>{call.data}</b> call from <b>{call.from_user.first_name}</b>\n<b>${coin_ticker}</b>\n💰 FDV: <code>{mcap}</code>\n<code>{contract}</code>"
+                if chain == "solana":
+                    text += f"\n<a href='https://t.me/mcqueen_bonkbot?start=ref_o895c_ca_{contract}'>BONK BUY</a> | <a href='https://birdeye.so/token/{contract}?chain=solana'>Birdeye</a>"
+                elif chain == "ethereum":
+                    text += f"\n<a href='https://t.me/maestro?start=r-da6hki9'>Maestro Bot</a> | <a href='https://dexscreener.com/ethereum/{contract}'>DexScreener</a>"
+                else:
+                    text += "\n<a href='https://t.me/maestro?start=r-da6hki9'>Maestro Bot</a>"
+                await bot.send_message(chat_id=data.config.CHANNEL_ID, text=text)
                 await call.message.edit_reply_markup(reply_markup=None)
                 await call.message.reply(f"{call.data} call have been made")
                 del state_data[message_id]
